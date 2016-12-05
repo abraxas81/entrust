@@ -26,6 +26,20 @@ trait EntrustRoleTrait
         }
         else return $this->perms()->get();
     }
+
+    public function cachedModulePermissions($permission, $module = null)
+    {
+        //$rolePrimaryKey = $this->primaryKey;
+        $cacheKey = 'entrust_permissions_for_role_'.$this->id.'module_'.$module->name;
+        $perm = Cache::tags(Config::get('entrust.role_module_table'))->remember($cacheKey, Config::get('cache.ttl'), function () use ($permission, $module) {
+            return $this->modules()
+                ->where('module_id', $module->id)
+                ->get(['acc_'.$permission])->toArray();
+        });
+
+        return $perm;
+
+    }
     public function save(array $options = [])
     {   //both inserts and updates
         if(!parent::save($options)){
@@ -80,6 +94,17 @@ trait EntrustRoleTrait
     }
 
     /**
+     * Many-to-Many relations with the modules model.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
+
+    public function modules()
+    {
+        return $this->belongsToMany(Config::get('entrust.modules'), Config::get('entrust.role_module_table'), Config::get('entrust.role_foreign_key'), Config::get('entrust.module_foreign_key'));
+    }
+
+    /**
      * Boot the role model
      * Attach event listener to remove the many-to-many records when trying to delete
      * Will NOT delete any records if the role model uses soft deletes.
@@ -127,6 +152,42 @@ trait EntrustRoleTrait
             return $requireAll;
         } else {
             foreach ($this->cachedPermissions() as $permission) {
+                if ($permission->name == $name) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks if the role has a permission by its name.
+     *
+     * @param string|array $name       Permission name or array of permission names.
+     * @param bool         $requireAll All permissions in the array are required.
+     *
+     * @return bool
+     */
+    public function access($name, $requireAll = false)
+    {
+        if (is_array($name)) {
+            foreach ($name as $accessValue) {
+                $hasModuleAcces = $this->access($accessValue);
+
+                if ($hasModuleAcces && !$requireAll) {
+                    return true;
+                } elseif (!$hasModuleAcces && $requireAll) {
+                    return false;
+                }
+            }
+
+            // If we've made it this far and $requireAll is FALSE, then NONE of the permissions were found
+            // If we've made it this far and $requireAll is TRUE, then ALL of the permissions were found.
+            // Return the value of $requireAll;
+            return $requireAll;
+        } else {
+            foreach ($this->cachedModules() as $permission) {
                 if ($permission->name == $name) {
                     return true;
                 }

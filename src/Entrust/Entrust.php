@@ -80,6 +80,23 @@ class Entrust
     }
 
     /**
+     * Check if the current user has access to given model
+     *
+     * @param array|string $permission            The $permission(s) needed.
+     * @param array|string $module to check permission
+     *
+     * @return bool
+     */
+    public function access($permission, $module, $requireAll = false)
+    {
+        if ($user = $this->user()) {
+            return $user->access($permission, $module,$requireAll);
+        }
+
+        return false;
+    }
+
+    /**
      * Get the currently authenticated user or null.
      *
      * @return Illuminate\Auth\UserInterface|null
